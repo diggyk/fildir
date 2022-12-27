@@ -12,30 +12,11 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "fildir.refresh",
-        "title": "Refresh",
-        "icon": {
-          "light": "resources/light/refresh.svg",
-          "dark": "resources/dark/refresh.svg"
-        }
-      }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "fildir.refresh",
-          "when": "view == fildir",
-          "group": "navigation"
-        }
-      ]
-    },
     "views": {
       "explorer": [
         {
           "id": "fildir",
-          "name": "Filtered Directories",
+          "name": "Fildir",
           "icon": "media/dep.svg"
         }
       ]
