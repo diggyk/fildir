@@ -5,18 +5,40 @@ import * as path from "path";
 import { create } from "domain";
 import { join } from "path";
 
-const filters = [
-	"disco/",
-	"oms/helm/",
-];
-
 /// Provides both the filesystem implementation, so we can add filtered view in the file explorer,
 /// and a tree view so we can set up an editable view of globss
 export class FilteredDirectoryProvider
-	implements vscode.FileSystemProvider, vscode.TreeDataProvider<Uri> {
+	implements vscode.FileSystemProvider, vscode.TreeDataProvider<string> {
+
+	private filters: Set<string> = new Set();
 
 	constructor() {
+		console.log("Constructor");
+		this.reloadConfig();
 		this.rebuildRootNodes();
+	}
+
+	reloadConfig() {
+		let config = vscode.workspace.getConfiguration();
+
+		let filters: Set<string> = config.get("fildir.prefixes")!;
+		let normalizedFilters: Set<string> = new Set();
+		// validate all filters end with "/"
+		filters.forEach(f => {
+			f.endsWith('/') ? normalizedFilters.add(f) : normalizedFilters.add(f + '/');
+		});
+
+		this.filters = normalizedFilters;
+	}
+
+	private _onDidChangeTreeData = new vscode.EventEmitter<string>();
+	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+	getTreeItem(element: string): vscode.TreeItem | Thenable<vscode.TreeItem> {
+		return new vscode.TreeItem(element);
+	}
+	getChildren(element?: string | undefined): vscode.ProviderResult<string[]> {
+		let list = [...this.filters].sort();
+		return list;
 	}
 
 	/// map of workspace name and root path
@@ -69,7 +91,7 @@ export class FilteredDirectoryProvider
 	/// See if our path is a prefix to one of our filters
 	prefixOfFilter(subpath: string): boolean {
 		let prefixOfFilter = false;
-		for (const filter of filters) {
+		for (const filter of this.filters) {
 			if (filter.startsWith(subpath + "/")) {
 				prefixOfFilter = true;
 			}
@@ -84,7 +106,7 @@ export class FilteredDirectoryProvider
 		}
 
 		let matchesFilter = false;
-		for (const filter of filters) {
+		for (const filter of this.filters) {
 			if (subpath.startsWith(filter)) {
 				matchesFilter = true;
 			}
@@ -124,16 +146,6 @@ export class FilteredDirectoryProvider
 		// add out folder at the end
 		newOrder.push({ uri: vscode.Uri.parse('fildir:/'), name: "Filtered View" });
 		vscode.workspace.updateWorkspaceFolders(0, folders.length, ...newOrder);
-	}
-
-
-	private _treeemitter = new vscode.EventEmitter<Uri | undefined | void>();
-	readonly onDidChangeTreeData = this._treeemitter.event;
-	getTreeItem(element: Uri): vscode.TreeItem | Thenable<vscode.TreeItem> {
-		return new vscode.TreeItem(element.path);
-	}
-	getChildren(element?: Uri | undefined): vscode.ProviderResult<Uri[]> {
-		return [];
 	}
 
 	/// We use this to tell VSCode to reexamine our root
@@ -253,11 +265,9 @@ export function activate(context: vscode.ExtensionContext) {
 	if (last !== 0) { vscode.workspace.updateWorkspaceFolders(last, 0, { uri: vscode.Uri.parse('fildir:/'), name: "Filtered View" }); }
 
 	vscode.workspace.onDidChangeWorkspaceFolders(filDirProvider.workspacesChanged);
-
 }
 
 export function deactivate(context: vscode.ExtensionContext) {
-
 	let fildirIndex: number | null = null;
 	vscode.workspace.workspaceFolders?.forEach((folder, index) => {
 
@@ -267,7 +277,6 @@ export function deactivate(context: vscode.ExtensionContext) {
 	});
 
 	if (fildirIndex !== null) {
-
 		vscode.workspace.updateWorkspaceFolders(fildirIndex, 1);
 	}
 }

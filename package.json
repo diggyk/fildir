@@ -12,12 +12,24 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Fildir",
+      "properties": {
+        "fildir.prefixes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["myproj/", "otherproj/"],
+          "description": "List of prefixes of paths you want to see in the filtered section"
+        }
+      }
+    },
     "views": {
       "explorer": [
         {
           "id": "fildir",
           "name": "Fildir",
-          "icon": "media/dep.svg"
+          "contextualTitle": "Active Filters",
+          "icon": "media/icon.png"
         }
       ]
     }
