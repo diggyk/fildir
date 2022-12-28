@@ -32,6 +32,12 @@ export class FilteredDirectoryProvider
 
     this.filters = normalizedFilters;
     this._onDidChangeTreeData.fire(null);
+    this._onDidChangeFile.fire([
+      {
+        type: vscode.FileChangeType.Changed,
+        uri: Uri.parse("fildir:/"),
+      },
+    ]);
   }
 
   /// Add a new prefix, usually from the context menu in the file explorer
@@ -42,6 +48,7 @@ export class FilteredDirectoryProvider
       return;
     }
 
+    // we only support directory prefixes
     vscode.workspace.fs.stat(uri).then((stat) => {
       if (stat.type !== vscode.FileType.Directory) {
         vscode.window.showErrorMessage(
@@ -55,21 +62,63 @@ export class FilteredDirectoryProvider
     let relPath = vscode.workspace.asRelativePath(uri);
     relPath = relPath.split("/").slice(1).join("/") + "/";
     this.filters.add(relPath);
+
     let config = vscode.workspace.getConfiguration();
     config.update(
       "fildir.prefixes",
       [...this.filters],
       vscode.ConfigurationTarget.Workspace
     );
+
     this._onDidChangeTreeData.fire(null);
+    this._onDidChangeFile.fire([
+      {
+        type: vscode.FileChangeType.Changed,
+        uri: Uri.parse("fildir:/"),
+      },
+    ]);
   }
 
-  private _onDidChangeTreeData = new vscode.EventEmitter<
-    string | undefined | null
-  >();
+  public removePrefix(prefix: string) {
+    this.filters.delete(prefix);
+    let config = vscode.workspace.getConfiguration();
+    config.update(
+      "fildir.prefixes",
+      [...this.filters],
+      vscode.ConfigurationTarget.Workspace
+    );
+
+    this._onDidChangeTreeData.fire(null);
+    this._onDidChangeFile.fire([
+      {
+        type: vscode.FileChangeType.Changed,
+        uri: Uri.parse("fildir:/"),
+      },
+    ]);
+  }
+
+  private _onDidChangeTreeData = new vscode.EventEmitter<string | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   getTreeItem(element: string): vscode.TreeItem | Thenable<vscode.TreeItem> {
-    return new vscode.TreeItem(element);
+    let item = new vscode.TreeItem(element);
+    item.iconPath = {
+      light: path.join(
+        __filename,
+        "..",
+        "..",
+        "resources",
+        "light",
+        "close.svg"
+      ),
+      dark: path.join(__filename, "..", "..", "resources", "dark", "close.svg"),
+    };
+    item.command = {
+      command: "fildir.remove_prefix",
+      title: "Remove prefix",
+      arguments: [element],
+    };
+
+    return item;
   }
   getChildren(element?: string | undefined): vscode.ProviderResult<string[]> {
     let list = [...this.filters].sort();
@@ -107,6 +156,13 @@ export class FilteredDirectoryProvider
         vscode.workspace.workspaceFolders.length
       );
     }
+
+    this._onDidChangeFile.fire([
+      {
+        type: vscode.FileChangeType.Changed,
+        uri: Uri.parse("fildir:/"),
+      },
+    ]);
   }
 
   /// takes a path that's given and converts it to a file system path based on workspace root
@@ -333,6 +389,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("fildir.add_prefix", (uri) =>
       filDirProvider.addPrefix(uri)
+    )
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("fildir.remove_prefix", (prefix) =>
+      filDirProvider.removePrefix(prefix)
     )
   );
 
