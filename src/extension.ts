@@ -13,12 +13,11 @@ export class FilteredDirectoryProvider
 	private filters: Set<string> = new Set();
 
 	constructor() {
-		console.log("Constructor");
 		this.reloadConfig();
 		this.rebuildRootNodes();
 	}
 
-	reloadConfig() {
+	public reloadConfig() {
 		let config = vscode.workspace.getConfiguration();
 
 		let filters: Set<string> = config.get("fildir.prefixes")!;
@@ -29,9 +28,10 @@ export class FilteredDirectoryProvider
 		});
 
 		this.filters = normalizedFilters;
+		this._onDidChangeTreeData.fire(null);
 	}
 
-	private _onDidChangeTreeData = new vscode.EventEmitter<string>();
+	private _onDidChangeTreeData = new vscode.EventEmitter<string | undefined | null>();
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 	getTreeItem(element: string): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return new vscode.TreeItem(element);
@@ -244,13 +244,6 @@ export class FilteredDirectoryProvider
 		throw new Error("Method not implemented.");
 	}
 
-
-	public openClickedItem(path: string) {
-		console.debug("Open " + path);
-		vscode.workspace.openTextDocument(path).then(document => {
-			vscode.window.showTextDocument(document, { preview: false });
-		});
-	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -258,7 +251,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(vscode.workspace.registerFileSystemProvider("fildir", filDirProvider, { isCaseSensitive: true }));
 	context.subscriptions.push(vscode.window.registerTreeDataProvider("fildir", filDirProvider));
-	context.subscriptions.push(vscode.commands.registerCommand('open_clicked_item', fullpath => filDirProvider.openClickedItem(fullpath)));
+	context.subscriptions.push(vscode.commands.registerCommand('fildir.reload_config', () => filDirProvider.reloadConfig()));
 
 	let last = vscode.workspace.workspaceFolders?.length || 0;
 	// this should never be the first workspace folder

@@ -12,16 +12,39 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "fildir.reload_config",
+        "title": "Reload Configs",
+        "icon": {
+          "light": "resources/light/refresh.svg",
+          "dark": "resources/dark/refresh.svg"
+        }
+      }
+    ],
     "configuration": {
       "title": "Fildir",
       "properties": {
         "fildir.prefixes": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["myproj/", "otherproj/"],
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "myproj/",
+            "otherproj/"
+          ],
           "description": "List of prefixes of paths you want to see in the filtered section"
         }
       }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "fildir.reload_config",
+          "group": "navigation"
+        }
+      ]
     },
     "views": {
       "explorer": [
