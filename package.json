@@ -1,13 +1,25 @@
 {
   "name": "fildir",
   "displayName": "Fildir",
-  "description": "",
+  "description": "Filtered Directories, to quickly find your content in a monorepo",
+  "publisher": "diggyk",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/diggyk/fildir"
+  },
   "engines": {
     "vscode": "^1.54.0"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "filter",
+    "directory",
+    "working set",
+    "set"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
