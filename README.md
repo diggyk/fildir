@@ -1,71 +1,11 @@
-# fildir README
+# Fildir -- ALPHA
 
-This is the README for your extension "fildir". After writing up a brief description, we recommend including the following sections.
+Filtered Directories (Fildir) helps you focus on just the parts of your monorepo that you care about. Fildir creates a virtual workspace root in the File Explorer, listing only the directories (and their subdirectories and files, recursively) that match one of a set of prefixes you specify.  Adding a new prefix is simple: right click on a directory in the File Explorer and select "Add as Filter Prefix". Removing a prefix is also easy, accessible from either the Fildir panel, Settings UI, or in the `settings.json` file.
 
-## Features
+## Limitations
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+* At present, Fildir only works with traditional filesystems and does not work with workspaces that are mounted over devices such as FTP or NFS.
+* Fildir is only examining directories when looking for prefix matches and does not support substring matches on directories names
+* Because Fildir is a implemented via a custom filesystem provider, SCM integrations will not work. That is to say, you may not see annotations for files that have changed, or other UX features provided by various SCM extensions.
 
-For example if there is an image subfolder under your extension project workspace:
 
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
