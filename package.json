@@ -20,6 +20,10 @@
           "light": "resources/light/refresh.svg",
           "dark": "resources/dark/refresh.svg"
         }
+      },
+      {
+        "command": "fildir.add_prefix",
+        "title": "Add as Filter Prefix..."
       }
     ],
     "configuration": {
@@ -39,6 +43,12 @@
       }
     },
     "menus": {
+      "explorer/context": [
+        {
+          "command": "fildir.add_prefix",
+          "group": "2_main@1"
+        }
+      ],
       "view/title": [
         {
           "command": "fildir.reload_config",
