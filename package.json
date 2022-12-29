@@ -4,12 +4,12 @@
   "description": "Filtered Directories, to quickly find your content in a monorepo",
   "publisher": "diggyk",
   "license": "SEE LICENSE IN LICENSE.txt",
-  "version": "0.0.3",
+  "version": "0.1.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/diggyk/fildir"
   },
-  "icon": "media/icon.png",
+  "icon": "media/logo.png",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -36,7 +36,12 @@
       },
       {
         "command": "fildir.add_prefix",
-        "title": "Add as Filter Prefix..."
+        "title": "Add as Filter Prefix"
+      },
+      {
+        "command": "fildir.remove_prefix",
+        "title": "Remove as Filter Prefix",
+        "icon": "$(trash)"
       }
     ],
     "configuration": {
@@ -66,6 +71,13 @@
         {
           "command": "fildir.reload_config",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "fildir.remove_prefix",
+          "when": "view == fildir && viewItem == fildir_prefix",
+          "group": "inline"
         }
       ]
     },

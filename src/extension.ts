@@ -99,6 +99,8 @@ export class FilteredDirectoryProvider
 
   private _onDidChangeTreeData = new vscode.EventEmitter<string | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  /// Get an item to display in the Fildir panel
   getTreeItem(element: string): vscode.TreeItem | Thenable<vscode.TreeItem> {
     let item = new vscode.TreeItem(element);
     item.iconPath = {
@@ -108,18 +110,24 @@ export class FilteredDirectoryProvider
         "..",
         "resources",
         "light",
-        "close.svg"
+        "list-filter.svg"
       ),
-      dark: path.join(__filename, "..", "..", "resources", "dark", "close.svg"),
+      dark: path.join(
+        __filename,
+        "..",
+        "..",
+        "resources",
+        "dark",
+        "list-filter.svg"
+      ),
     };
-    item.command = {
-      command: "fildir.remove_prefix",
-      title: "Remove prefix",
-      arguments: [element],
-    };
+
+    item.contextValue = "fildir_prefix";
 
     return item;
   }
+
+  /// Get all the elements in the fildir panel
   getChildren(element?: string | undefined): vscode.ProviderResult<string[]> {
     let list = [...this.filters].sort();
     return list;
