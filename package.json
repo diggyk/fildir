@@ -4,7 +4,7 @@
   "description": "Filtered Directories, to quickly find your content in a monorepo",
   "publisher": "diggyk",
   "license": "SEE LICENSE IN LICENSE.txt",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/diggyk/fildir"
@@ -22,7 +22,11 @@
     "working set",
     "set"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:explorer",
+    "onView:fildir",
+    "onFileSystem:fildir"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [

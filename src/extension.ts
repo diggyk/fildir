@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { create } from "domain";
 import { join } from "path";
+import { type } from "os";
 
 /// Provides both the filesystem implementation, so we can add filtered view in the file explorer,
 /// and a tree view so we can set up an editable view of globss
@@ -71,12 +72,18 @@ export class FilteredDirectoryProvider
     );
 
     this._onDidChangeTreeData.fire(null);
-    this._onDidChangeFile.fire([
-      {
-        type: vscode.FileChangeType.Changed,
-        uri: Uri.parse("fildir:/"),
-      },
-    ]);
+
+    // fire an update to prompt updating the tree
+    let events = [];
+    let split = relPath.split('/');
+    for (let x = 0; x < split.length; x++) {
+      events.push ({
+        type: vscode.FileChangeType.Created,
+        uri: Uri.parse("fildir:/" + split.slice(0,x)),
+      });
+
+    }
+    this._onDidChangeFile.fire(events);
   }
 
   public removePrefix(prefix: string) {
