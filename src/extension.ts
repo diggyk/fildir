@@ -12,6 +12,7 @@ export class FilteredDirectoryProvider
   implements vscode.FileSystemProvider, vscode.TreeDataProvider<string>
 {
   private filters: Set<string> = new Set();
+  private rootWatchers: Map<string, vscode.FileSystemWatcher> = new Map();
 
   constructor() {
     this.reloadConfig();
@@ -96,12 +97,17 @@ export class FilteredDirectoryProvider
     );
 
     this._onDidChangeTreeData.fire(null);
-    this._onDidChangeFile.fire([
-      {
-        type: vscode.FileChangeType.Changed,
-        uri: Uri.parse("fildir:/"),
-      },
-    ]);
+
+    let events = [];
+    for (const workspace of vscode.workspace.workspaceFolders || []) {
+      events.push(
+        {
+          type: vscode.FileChangeType.Deleted,
+          uri: Uri.parse("fildir:/" + workspace.name + "/" + prefix)
+        }
+      );
+    }
+    this._onDidChangeFile.fire(events);
   }
 
   private _onDidChangeTreeData = new vscode.EventEmitter<string | null>();
@@ -162,6 +168,16 @@ export class FilteredDirectoryProvider
       }
 
       this.rootNodes.set(workspaceRoot.name, workspaceRoot.uri.path);
+      let watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceRoot.uri, "**") );
+      this.rootWatchers.set(workspaceRoot.name, watcher);
+      watcher.onDidCreate(uri => {
+        let r = vscode.workspace.asRelativePath(uri);
+        this._onDidChangeFile.fire([{uri: Uri.parse("fildir:/" + r), type: vscode.FileChangeType.Created}]);
+      });
+      watcher.onDidDelete(uri => {
+        let r= vscode.workspace.asRelativePath(uri);
+        this._onDidChangeFile.fire([{uri: Uri.parse("fildir:/" + r), type: vscode.FileChangeType.Deleted}]);
+      });
     }
 
     // if we have 0 roots, we should remove ourselves as well
@@ -180,10 +196,8 @@ export class FilteredDirectoryProvider
     ]);
   }
 
-  /// takes a path that's given and converts it to a file system path based on workspace root
-  /// and also gives us the "subpath" which is the relative path to the file where we should find it
-  /// if it exists under a workspace root folder
-  convertPath(path: string): string[] {
+  /// splits a relative path into workspace name and relative path to that workspace root
+  splitRelativePath(path: string): [string, string] {
     if (path[0] === "/") {
       path = path.substring(1);
     }
@@ -191,13 +205,22 @@ export class FilteredDirectoryProvider
     let segments = path.split("/");
     if (!this.rootNodes.has(segments[0])) {
       throw vscode.FileSystemError.FileNotFound(
-        "Fildir could not parse path: " + path
+        "Unknown root note: " + path
       );
     }
 
     let subpath = segments.slice(1).join("/");
 
-    return [this.rootNodes.get(segments[0]) + "/" + subpath, subpath];
+    return [segments[0], subpath];
+  }
+
+  /// takes a path that's given and converts it to a file system path based on workspace root
+  /// and also gives us the "subpath" which is the relative path to the file where we should find it
+  /// if it exists under a workspace root folder
+  convertPath(path: string): string[] {
+    let [rootbase, subpath] = this.splitRelativePath(path);
+
+    return [this.rootNodes.get(rootbase) + "/" + subpath, subpath];
   }
 
   /// See if our path is a prefix to one of our filters
@@ -309,24 +332,27 @@ export class FilteredDirectoryProvider
     // if the directory we want to read starts with one of our prefix filters, than we want to display it
     let matchesFilter = this.subpathMatchesFilter(subpath);
 
+    // read from the read file system...
     return vscode.workspace.fs.readDirectory(Uri.file(path)).then((finds) => {
       let items: [string, vscode.FileType][] = [];
-      for (const found of finds) {
+
+      // examine all directory entries and their types to see what we need to include in our filtered view
+      for (const [dirent, direntType] of finds) {
         if (matchesFilter) {
           // because our directory matched a filter, we can display all items
-          items.push(found);
+          items.push([dirent, direntType]);
         } else {
           // our directory itself didn't match a filter, but one of the subdirs might be
           // a prefix of one of our filters, meaning it is part of the path to get to our
           // desired filtered directory
           let testpath =
-            subpath.trim().length > 0 ? subpath + "/" + found[0] : found[0];
+            subpath.trim().length > 0 ? subpath + "/" + dirent : dirent;
 
           if (
-            found[1] === vscode.FileType.Directory &&
+            direntType === vscode.FileType.Directory &&
             this.prefixOfFilter(testpath)
           ) {
-            items.push(found);
+            items.push([dirent, direntType]);
           }
         }
       }
