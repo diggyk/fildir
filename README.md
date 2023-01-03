@@ -1,6 +1,9 @@
-# Fildir -- ALPHA
+# Fildir
 
 Filtered Directories (Fildir) helps you focus on just the parts of your monorepo that you care about. Fildir creates a virtual workspace root in the File Explorer, listing only the directories (and their subdirectories and files, recursively) that match one of a set of prefixes you specify.  Adding a new prefix is simple: right click on a directory in the File Explorer and select "Add as Filter Prefix". Removing a prefix is also easy, accessible from either the Fildir panel, Settings UI, or in the `settings.json` file.
+
+![Demo1](demo1.gif)
+![Demo2](demo2.gif)
 
 ## Limitations
 
