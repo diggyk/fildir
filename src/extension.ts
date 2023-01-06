@@ -2,8 +2,6 @@ import * as vscode from "vscode";
 import { Uri } from "vscode";
 import * as path from "path";
 
-/// Provides both the filesystem implementation, so we can add filtered view in the file explorer,
-/// and a tree view so we can set up an editable view of globss
 export class FilteredDirectoryProvider
   implements vscode.FileSystemProvider, vscode.TreeDataProvider<string>
 {
@@ -15,11 +13,11 @@ export class FilteredDirectoryProvider
     this.rebuildRootNodes();
   }
 
-  /// Reload our configs from the settings
+  /** Reload the config from the saved configurations */
   public reloadConfig() {
     let filters: string[] = vscode.workspace
-      .getConfiguration("")
-      .get("fildir.prefixes")!;
+      .getConfiguration("fildir")
+      .get("prefixes")!;
     let normalizedFilters: Set<string> = new Set();
     filters.forEach((f) => {
       normalizedFilters.add(f);
@@ -35,7 +33,12 @@ export class FilteredDirectoryProvider
     ]);
   }
 
-  /// Add a new prefix, usually from the context menu in the file explorer
+  /**
+   * Add a new prefix, usually from the context menu in the file explorer
+   *
+   * @param uri the URI from which we will derive the prefix
+   * @returns return early if URI not in the `file` scheme
+   */
   public addPrefix(uri: Uri) {
     console.debug("addPrefix: " + uri.path);
     // we only support the file scheme
@@ -46,6 +49,7 @@ export class FilteredDirectoryProvider
 
     let relPath = vscode.workspace.asRelativePath(uri);
     vscode.workspace.fs.stat(uri).then((stat) => {
+      // drop workspace folder and add a trailing / if it is a directory
       if (stat.type === vscode.FileType.Directory) {
         relPath = relPath.split("/").slice(1).join("/") + "/";
         this.filters.add(relPath);
@@ -54,35 +58,25 @@ export class FilteredDirectoryProvider
         this.filters.add(relPath);
       }
 
-      this.afterPrefixChanges(relPath);
+      this.afterPrefixChanges(relPath, null);
     });
   }
 
+  /**
+   * Drop a given prefix
+   * @param prefix the prefix to drop
+   */
   public removePrefix(prefix: string) {
     this.filters.delete(prefix);
-    let config = vscode.workspace.getConfiguration();
-    config.update(
-      "fildir.prefixes",
-      [...this.filters],
-      vscode.ConfigurationTarget.Workspace
-    );
-
-    this._onDidChangeTreeData.fire(null);
-
-    let events = [];
-    for (const workspace of vscode.workspace.workspaceFolders || []) {
-      events.push({
-        type: vscode.FileChangeType.Deleted,
-        uri: Uri.parse("fildir:/" + workspace.name + "/" + prefix),
-      });
-    }
-    this._onDidChangeFile.fire(events);
+    this.afterPrefixChanges(null, prefix);
   }
 
   /**
    * After we've updated prefixes, update the configs and fire some events to force refreshes
+   * @param relPath the relative path that was used if a new prefix was added
+   * @param prefix the prefix that was removed, if any
    */
-  private afterPrefixChanges(relPath: string) {
+  private afterPrefixChanges(relPath: string | null, prefix: string | null) {
     let config = vscode.workspace.getConfiguration();
     config.update(
       "fildir.prefixes",
@@ -92,14 +86,27 @@ export class FilteredDirectoryProvider
 
     this._onDidChangeTreeData.fire(null);
 
-    // fire an update to prompt updating the tree
     let events = [];
-    let split = relPath.split("/");
-    for (let x = 0; x < split.length; x++) {
-      events.push({
-        type: vscode.FileChangeType.Created,
-        uri: Uri.parse("fildir:/" + split.slice(0, x)),
-      });
+    if (relPath) {
+      // if a relative path is given, we added a prefix. Refresh each section along the path
+      // to make sure we see the new directories included by the prefix
+      let split = relPath.split("/");
+      for (let x = 0; x < split.length; x++) {
+        events.push({
+          type: vscode.FileChangeType.Created,
+          uri: Uri.parse("fildir:/" + split.slice(0, x)),
+        });
+      }
+    }
+
+    if (prefix) {
+      // if prefix given, delete things that start with that prefix from the fildir view
+      for (const workspace of vscode.workspace.workspaceFolders || []) {
+        events.push({
+          type: vscode.FileChangeType.Deleted,
+          uri: Uri.parse("fildir:/" + workspace.name + "/" + prefix),
+        });
+      }
     }
     this._onDidChangeFile.fire(events);
   }
@@ -107,7 +114,11 @@ export class FilteredDirectoryProvider
   private _onDidChangeTreeData = new vscode.EventEmitter<string | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  /// Get an item to display in the Fildir panel
+  /**
+   * Get an item to display in the Fildir panel
+   * @param element the element to display, usually a prefix value
+   * @returns a TreeItem of the element
+   */
   getTreeItem(element: string): vscode.TreeItem | Thenable<vscode.TreeItem> {
     let item = new vscode.TreeItem(element);
     item.iconPath = {
@@ -134,18 +145,27 @@ export class FilteredDirectoryProvider
     return item;
   }
 
-  /// Get all the elements in the fildir panel
+  /**
+   * Get all children of the root or particular element in the Fildir panel
+   * @param element the element (or undefined, if root) under which we want all child elements
+   * @returns the values under a given element in the Fildir panel
+   */
   getChildren(element?: string | undefined): vscode.ProviderResult<string[]> {
     let list = [...this.filters].sort();
     return list;
   }
 
-  /// map of workspace name and root path
+  /**
+   * Map of workspace name and root path
+   */
   private rootNodes: Map<string, string> = new Map();
   private rebuildTime = Date.now();
 
-  // We rebuild our root nodes by taking a look at our open workspace folders and adding them as top-level
-  // directories under the filtered directories view
+  /**
+   * We rebuild our root nodes by taking a look at our open workspace folders and adding them as top-level
+   * directories under the filtered directories view
+   * @returns return early if we have no workspace folders
+   */
   rebuildRootNodes() {
     this.rebuildTime = Date.now();
     this.rootNodes = new Map();
@@ -202,8 +222,12 @@ export class FilteredDirectoryProvider
     ]);
   }
 
-  /// splits a relative path into workspace name and relative path to that workspace root
-  /// Ex: testing/Fusion/node_modules into testing, Fusion/node_modules
+  /**
+   * splits a relative path into workspace name and relative path to that workspace root
+   * Ex: testing/Fusion/node_modules into testing, Fusion/node_modules
+   * @param path the path to be split
+   * @returns workspace name, relative path to that workspace root
+   */
   splitRelativePath(path: string): [string, string] {
     if (path[0] === "/") {
       path = path.substring(1);
@@ -219,19 +243,28 @@ export class FilteredDirectoryProvider
     return [segments[0], subpath];
   }
 
-  /* takes a path that's given and converts it to a file system path based on workspace root
-     and also gives us the "subpath" which is the relative path to the file where we should find it
-     if it exists under a workspace root folder
-     Ex: /testing/Fusion/node_modules into
-     /Users/xxx/CODING_PROJECTS/vscode-extensions/fildir/testing/Fusion/node_modules, Fusion/node_modules
-  */
+  /**
+   * takes a path that's given and converts it to a file system path based on workspace root
+   * and also gives us the "subpath" which is the relative path to the file where we should find it
+   * if it exists under a workspace root folder
+   * Ex: /testing/Fusion/node_modules into
+   * /Users/xxx/CODING_PROJECTS/vscode-extensions/fildir/testing/Fusion/node_modules, Fusion/node_modules
+   * @param path the path to be split
+   * @returns full filesystem path, subpath under the main file path of the workspace root directory
+   */
   convertPath(path: string): string[] {
     let [rootbase, subpath] = this.splitRelativePath(path);
 
     return [this.rootNodes.get(rootbase) + "/" + subpath, subpath];
   }
 
-  /// See if our path is a prefix to one of our filters
+  /**
+   * See if the given subpath is a prefix to one of our filters. This lets us see
+   * if we should include a directory even if it doesn't match a filter but subdirectories
+   * might actually match
+   * @param subpath the path to check
+   * @returns true if the subpath is a prefix of any filter
+   */
   prefixOfFilter(subpath: string): boolean {
     let prefixOfFilter = false;
     for (const filter of this.filters) {
@@ -242,7 +275,11 @@ export class FilteredDirectoryProvider
     return prefixOfFilter;
   }
 
-  /// check is a subpath is prefixed by one of our filters
+  /**
+   * Check is a subpath is prefixed by one of our filters
+   * @param subpath the subpath to check
+   * @returns true if the subpath starts with one of our filters
+   */
   subpathMatchesFilter(subpath: string): boolean {
     if (!subpath.endsWith("/")) {
       subpath = subpath + "/";
@@ -257,8 +294,12 @@ export class FilteredDirectoryProvider
     return matchesFilter;
   }
 
-  /// when the workspaces change, we want to either move our workspace folder to the end or remove
-  /// it all together if we don't have any other folders.
+  /**
+   * When the workspaces change, we want to either move our workspace folder to the end or
+   * remove it all together if we don't have any other folders.
+   * @param _event the workspace change event (ignored)
+   * @returns return early if no folders left in workspaces
+   */
   workspacesChanged(_event: vscode.WorkspaceFoldersChangeEvent) {
     let folders = vscode.workspace.workspaceFolders;
 
