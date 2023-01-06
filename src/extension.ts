@@ -1,10 +1,6 @@
 import * as vscode from "vscode";
 import { Uri } from "vscode";
-import * as fs from "fs";
 import * as path from "path";
-import { create } from "domain";
-import { join } from "path";
-import { type } from "os";
 
 /// Provides both the filesystem implementation, so we can add filtered view in the file explorer,
 /// and a tree view so we can set up an editable view of globss
@@ -25,11 +21,8 @@ export class FilteredDirectoryProvider
       .getConfiguration("")
       .get("fildir.prefixes")!;
     let normalizedFilters: Set<string> = new Set();
-    // validate all filters end with "/"
     filters.forEach((f) => {
-      f.endsWith("/")
-        ? normalizedFilters.add(f)
-        : normalizedFilters.add(f + "/");
+      normalizedFilters.add(f);
     });
 
     this.filters = normalizedFilters;
@@ -44,47 +37,25 @@ export class FilteredDirectoryProvider
 
   /// Add a new prefix, usually from the context menu in the file explorer
   public addPrefix(uri: Uri) {
+    console.debug("addPrefix: " + uri.path);
     // we only support the file scheme
     if (uri.scheme !== "file") {
       vscode.window.showErrorMessage("Fildir only supports local files");
       return;
     }
 
-    // we only support directory prefixes
-    vscode.workspace.fs.stat(uri).then((stat) => {
-      if (stat.type !== vscode.FileType.Directory) {
-        vscode.window.showErrorMessage(
-          "Fildir prefixes are limited to directories, not files"
-        );
-
-        return;
-      }
-    });
-
     let relPath = vscode.workspace.asRelativePath(uri);
-    relPath = relPath.split("/").slice(1).join("/") + "/";
-    this.filters.add(relPath);
+    vscode.workspace.fs.stat(uri).then((stat) => {
+      if (stat.type === vscode.FileType.Directory) {
+        relPath = relPath.split("/").slice(1).join("/") + "/";
+        this.filters.add(relPath);
+      } else {
+        relPath = relPath.split("/").slice(1).join("/");
+        this.filters.add(relPath);
+      }
 
-    let config = vscode.workspace.getConfiguration();
-    config.update(
-      "fildir.prefixes",
-      [...this.filters],
-      vscode.ConfigurationTarget.Workspace
-    );
-
-    this._onDidChangeTreeData.fire(null);
-
-    // fire an update to prompt updating the tree
-    let events = [];
-    let split = relPath.split('/');
-    for (let x = 0; x < split.length; x++) {
-      events.push ({
-        type: vscode.FileChangeType.Created,
-        uri: Uri.parse("fildir:/" + split.slice(0,x)),
-      });
-
-    }
-    this._onDidChangeFile.fire(events);
+      this.afterPrefixChanges(relPath);
+    });
   }
 
   public removePrefix(prefix: string) {
@@ -100,12 +71,35 @@ export class FilteredDirectoryProvider
 
     let events = [];
     for (const workspace of vscode.workspace.workspaceFolders || []) {
-      events.push(
-        {
-          type: vscode.FileChangeType.Deleted,
-          uri: Uri.parse("fildir:/" + workspace.name + "/" + prefix)
-        }
-      );
+      events.push({
+        type: vscode.FileChangeType.Deleted,
+        uri: Uri.parse("fildir:/" + workspace.name + "/" + prefix),
+      });
+    }
+    this._onDidChangeFile.fire(events);
+  }
+
+  /**
+   * After we've updated prefixes, update the configs and fire some events to force refreshes
+   */
+  private afterPrefixChanges(relPath: string) {
+    let config = vscode.workspace.getConfiguration();
+    config.update(
+      "fildir.prefixes",
+      [...this.filters],
+      vscode.ConfigurationTarget.Workspace
+    );
+
+    this._onDidChangeTreeData.fire(null);
+
+    // fire an update to prompt updating the tree
+    let events = [];
+    let split = relPath.split("/");
+    for (let x = 0; x < split.length; x++) {
+      events.push({
+        type: vscode.FileChangeType.Created,
+        uri: Uri.parse("fildir:/" + split.slice(0, x)),
+      });
     }
     this._onDidChangeFile.fire(events);
   }
@@ -168,15 +162,27 @@ export class FilteredDirectoryProvider
       }
 
       this.rootNodes.set(workspaceRoot.name, workspaceRoot.uri.path);
-      let watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceRoot.uri, "**") );
+      let watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(workspaceRoot.uri, "**")
+      );
       this.rootWatchers.set(workspaceRoot.name, watcher);
-      watcher.onDidCreate(uri => {
+      watcher.onDidCreate((uri) => {
         let r = vscode.workspace.asRelativePath(uri);
-        this._onDidChangeFile.fire([{uri: Uri.parse("fildir:/" + r), type: vscode.FileChangeType.Created}]);
+        this._onDidChangeFile.fire([
+          {
+            uri: Uri.parse("fildir:/" + r),
+            type: vscode.FileChangeType.Created,
+          },
+        ]);
       });
-      watcher.onDidDelete(uri => {
-        let r= vscode.workspace.asRelativePath(uri);
-        this._onDidChangeFile.fire([{uri: Uri.parse("fildir:/" + r), type: vscode.FileChangeType.Deleted}]);
+      watcher.onDidDelete((uri) => {
+        let r = vscode.workspace.asRelativePath(uri);
+        this._onDidChangeFile.fire([
+          {
+            uri: Uri.parse("fildir:/" + r),
+            type: vscode.FileChangeType.Deleted,
+          },
+        ]);
       });
     }
 
@@ -197,6 +203,7 @@ export class FilteredDirectoryProvider
   }
 
   /// splits a relative path into workspace name and relative path to that workspace root
+  /// Ex: testing/Fusion/node_modules into testing, Fusion/node_modules
   splitRelativePath(path: string): [string, string] {
     if (path[0] === "/") {
       path = path.substring(1);
@@ -204,9 +211,7 @@ export class FilteredDirectoryProvider
 
     let segments = path.split("/");
     if (!this.rootNodes.has(segments[0])) {
-      throw vscode.FileSystemError.FileNotFound(
-        "Unknown root note: " + path
-      );
+      throw vscode.FileSystemError.FileNotFound("Unknown root note: " + path);
     }
 
     let subpath = segments.slice(1).join("/");
@@ -214,9 +219,12 @@ export class FilteredDirectoryProvider
     return [segments[0], subpath];
   }
 
-  /// takes a path that's given and converts it to a file system path based on workspace root
-  /// and also gives us the "subpath" which is the relative path to the file where we should find it
-  /// if it exists under a workspace root folder
+  /* takes a path that's given and converts it to a file system path based on workspace root
+     and also gives us the "subpath" which is the relative path to the file where we should find it
+     if it exists under a workspace root folder
+     Ex: /testing/Fusion/node_modules into
+     /Users/xxx/CODING_PROJECTS/vscode-extensions/fildir/testing/Fusion/node_modules, Fusion/node_modules
+  */
   convertPath(path: string): string[] {
     let [rootbase, subpath] = this.splitRelativePath(path);
 
@@ -276,7 +284,7 @@ export class FilteredDirectoryProvider
       return;
     }
 
-    // add out folder at the end
+    // add our folder at the end -- we never want to be first or it messes up new root folder addition
     newOrder.push({ uri: vscode.Uri.parse("fildir:/"), name: "Filtered View" });
     vscode.workspace.updateWorkspaceFolders(0, folders.length, ...newOrder);
   }
@@ -288,16 +296,7 @@ export class FilteredDirectoryProvider
   readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> =
     this._onDidChangeFile.event;
 
-  watch(
-    uri: vscode.Uri,
-    options: {
-      readonly recursive: boolean;
-      readonly excludes: readonly string[];
-    }
-  ): vscode.Disposable {
-    return new vscode.Disposable(() => {});
-  }
-
+  /// *** IMPLEMENT THE STANDARD METHODS FOR A FILE SYSTEM PROVIDER BELOW *** ///
   stat(uri: vscode.Uri): vscode.FileStat | Thenable<vscode.FileStat> {
     if (uri.path === "/") {
       return {
@@ -314,6 +313,16 @@ export class FilteredDirectoryProvider
     return vscode.workspace.fs.stat(Uri.file(path));
   }
 
+  /** Read a directory after applying filters
+   *
+   * If the directory itself matches a filter we return all the items in the directory, else...
+   * If it is a file, we show it if it matches a filter or...
+   * If it is a directory, we show it if the path to this directory is a prefix of a filter
+   * (meaning it would be part of the path to get to the actual included directory)
+   *
+   * @param uri the URI of the directory to read
+   * @returns list of files and folders that match filters
+   */
   readDirectory(
     uri: vscode.Uri
   ): [string, vscode.FileType][] | Thenable<[string, vscode.FileType][]> {
@@ -341,17 +350,22 @@ export class FilteredDirectoryProvider
         if (matchesFilter) {
           // because our directory matched a filter, we can display all items
           items.push([dirent, direntType]);
-        } else {
+        } else if (direntType === vscode.FileType.Directory) {
           // our directory itself didn't match a filter, but one of the subdirs might be
           // a prefix of one of our filters, meaning it is part of the path to get to our
           // desired filtered directory
           let testpath =
             subpath.trim().length > 0 ? subpath + "/" + dirent : dirent;
 
-          if (
-            direntType === vscode.FileType.Directory &&
-            this.prefixOfFilter(testpath)
-          ) {
+          if (this.prefixOfFilter(testpath)) {
+            items.push([dirent, direntType]);
+          }
+        } else {
+          // our directory itself didn't match a filter, but one of the files may match
+          // so let's test them
+          let testpath =
+            subpath.trim().length > 0 ? subpath + "/" + dirent : dirent;
+          if (this.subpathMatchesFilter(testpath)) {
             items.push([dirent, direntType]);
           }
         }
@@ -359,6 +373,16 @@ export class FilteredDirectoryProvider
 
       return items;
     });
+  }
+
+  watch(
+    uri: vscode.Uri,
+    options: {
+      readonly recursive: boolean;
+      readonly excludes: readonly string[];
+    }
+  ): vscode.Disposable {
+    return new vscode.Disposable(() => {});
   }
 
   createDirectory(uri: vscode.Uri): void | Thenable<void> {
@@ -407,7 +431,14 @@ export class FilteredDirectoryProvider
     destination: vscode.Uri,
     options: { readonly overwrite: boolean }
   ): void | Thenable<void> {
-    throw new Error("Method not implemented.");
+    let [sourcepath, sourcesubpath] = this.convertPath(source.path);
+    let [destpath, destsubpath] = this.convertPath(destination.path);
+
+    return vscode.workspace.fs.copy(
+      Uri.file(sourcepath),
+      Uri.file(destpath),
+      options
+    );
   }
 }
 

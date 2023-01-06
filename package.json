@@ -25,7 +25,8 @@
   "activationEvents": [
     "onView:explorer",
     "onView:fildir",
-    "onFileSystem:fildir"
+    "onFileSystem:fildir",
+    "onFileSystem:file"
   ],
   "main": "./dist/extension.js",
   "contributes": {
